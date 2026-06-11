@@ -19,6 +19,7 @@ class AquaCog(commands.Cog):
         self.bot = bot
         # 👑 ID EXCLUSIVO DO GERALDÃO (APENAS VOCÊ MANDA)
         self.CRIADOR_ID = 569633804537430036
+        print("🤖 [AquaCog] Carregada com sucesso e pronta para o Geraldão!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -58,11 +59,9 @@ class AquaCog(commands.Cog):
         # Mostra no Discord que ela está a responder (Modo Chat IA)
         async with message.channel.typing():
             try:
-                # 🚀 Definindo a lista de modelos suportados para tentar o que estiver livre na sua conta grátis
-                modelos_para_tentar = ["gemini-2.5-flash", "gemini-2.5-pro"]
-                response = None
-                erro_acumulado = ""
-
+                # 🚀 Modelo Oficial Atualizado da API do Google
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                
                 prompt_sistema = f"""
                 Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord.
                 O criador supremo Geraldão deu-te a seguinte ordem ou pergunta: "{message.content}"
@@ -83,24 +82,15 @@ class AquaCog(commands.Cog):
                 - Use `await` para funções assíncronas do discord.py.
                 """
 
+                # 🛠️ Executa a chamada da API do Google em segundo plano para não congelar o Discord
                 loop = asyncio.get_event_loop()
-
-                # Tenta rodar com o 2.5-flash. Se der erro de cota (429), ele pula pro pro de forma automática.
-                for nome_modelo in modelos_para_tentar:
-                    try:
-                        model = genai.GenerativeModel(nome_modelo)
-                        response = await asyncio.wait_for(
-                            loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
-                            timeout=15.0
-                        )
-                        if response:
-                            break
-                    except Exception as e_modelo:
-                        erro_acumulado += f"\n- {nome_modelo}: {str(e_modelo)}"
-                        continue
-
-                if not response:
-                    await message.reply(f"❌ Todos os modelos gratuitos falharam ou atingiram o limite diário de requisições:{erro_acumulado}")
+                try:
+                    response = await asyncio.wait_for(
+                        loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
+                        timeout=15.0
+                    )
+                except asyncio.TimeoutError:
+                    await message.reply("⏳ A API do Gemini demorou muito para responder. Tente de novo.")
                     return
 
                 resposta_completa = response.text
@@ -124,12 +114,17 @@ class AquaCog(commands.Cog):
                         "bot": self.bot
                     }
                     
-                    linhas_codigo = [f"    {linha}" for list_linha in codigo_gerado.split('\n') for linha in [list_linha] if linha]
+                    # Formatação corrigida das linhas do código dinâmico
+                    linhas_codigo = []
+                    for linha in codigo_gerado.split('\n'):
+                        if linha.strip() or linha == '':
+                            linhas_codigo.append(f"    {linha}")
+                            
                     codigo_final = "async def _executar_ia(message, guild, bot):\n" + "\n".join(linhas_codigo)
                     
                     local_vars = {}
                     exec(codigo_final, ambiente_execucao, local_vars)
-                    await ambiente_execucao["_executar_ia"](message, message.guild, self.bot)
+                    await asyncio.create_task(ambiente_execucao["_executar_ia"](message, message.guild, self.bot))
 
                 # Se for apenas uma conversa normal, envia o texto conversacional
                 if texto_final and texto_final.strip() and (not codigo_gerado or not codigo_gerado.strip()):
@@ -138,8 +133,7 @@ class AquaCog(commands.Cog):
             except Exception as e:
                 erro = traceback.format_exc()
                 print(f"Erro interno na Aqua:\n{erro}")
-                await message.reply(f"❌ Ocorreu um erro interno ao processar:\n
-```py\n{str(e)}\n```")
+                await message.reply(f"❌ Ocorreu um erro interno ao processar:\n```py\n{str(e)}\n```")
 
 
 # Função obrigatória para o Discord.py carregar a Cog
