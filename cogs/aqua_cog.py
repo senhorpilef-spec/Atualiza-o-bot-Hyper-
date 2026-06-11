@@ -26,7 +26,7 @@ class AquaCog(commands.Cog):
         if message.author.bot:
             return
 
-        # 2. Verificar se a mensagem é um gatilho para a Aqua
+        # Verificar se a mensagem é um gatilho para a Aqua
         e_gatilho_aqua = False
         
         # Cenário A: O nome Aqua está na mensagem
@@ -42,7 +42,7 @@ class AquaCog(commands.Cog):
             except:
                 pass
 
-        # Se não é para a Aqua, ignora completamente
+        # Se não mencionou a Aqua e não é um Reply para ela, ignora e segue em frente
         if not e_gatilho_aqua:
             return
 
@@ -55,23 +55,25 @@ class AquaCog(commands.Cog):
             await message.reply("Erro: A chave de API da Aqua não foi configurada no sistema.")
             return
 
-        # Mostra no Discord que ela está a processar
+        # Mostra no Discord que ela está a responder (Modo Chat IA)
         async with message.channel.typing():
             model = genai.GenerativeModel("gemini-2.5-flash")
             
             prompt_sistema = f"""
             Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord.
-            O criador supremo Geraldão deu-te a seguinte ordem ou pergunta: "{message.content}"
+            O criador supremo Geraldão deu-te a seguinte ordem ou pergunta em linguagem natural: "{message.content}"
             
-            Responda ESTRITAMENTE em formato JSON com duas chaves:
-            1. "codigo": Código em Python puro usando discord.py para executar a ação ou responder à pergunta técnica (ex: se ele perguntar o dono, use `await message.reply(f"O dono é {{guild.owner.mention}}")`). Se for apenas uma conversa fiada/saudação sem necessidade de comandos, deixe vazio "".
-            2. "frase_sucesso": O texto normal de resposta conversacional que você enviará caso o "codigo" esteja vazio. Se o "codigo" já for enviar uma resposta técnica por conta própria, você pode deixar esta frase curta ou vazia.
+            Analise o pedido e responda ESTRITAMENTE em formato JSON com duas chaves:
+            1. "codigo": Linhas de código limpas em Python puro utilizando a biblioteca discord.py para realizar a ação ou buscar dados.
+            2. "frase_sucesso": Uma resposta em formato de texto normal (estilo IA conversacional) falando diretamente com o Geraldão. 
             
-            Regras:
-            - Variáveis disponíveis: `message`, `guild` e `bot`.
-            - Use `await` para funções assíncronas do discord.py.
-            - Nunca inclua marcações de markdown (```py) no JSON.
-            - Responda APENAS o JSON.
+            Regras cruciais:
+            - Se a ordem pedir para BUSCAR uma informação (ex: quem é o dono, quantos canais existem), você DEVE fazer o código enviar a resposta direto usando `await message.reply()`. Se fizer isso, deixe a "frase_sucesso" em branco "" para não duplicar a resposta.
+            - Se a ordem for apenas uma conversa, saudação ou pergunta geral, deixe a chave "codigo" totalmente vazia ("") e coloque a resposta na "frase_sucesso".
+            - Use `await` para todas as funções assíncronas do discord.py.
+            - Nunca inclua marcações de markdown (como ```py) dentro do valor do JSON.
+            
+            Responda APENAS o JSON estruturado, sem texto antes ou depois.
             """
             
             try:
@@ -80,11 +82,12 @@ class AquaCog(commands.Cog):
                     generation_config={"response_mime_type": "application/json"}
                 )
                 
+                # Desembrulha o JSON retornado pela IA
                 dados_ia = json.loads(response.text)
                 codigo_gerado = dados_ia.get("codigo", "")
                 frase_sucesso = dados_ia.get("frase_sucesso", "")
                 
-                # Executa o código se houver
+                # Se houver código técnico para executar ou buscar informações, roda IMEDIATAMENTE
                 if codigo_gerado and codigo_gerado.strip():
                     ambiente_execucao = {
                         "discord": discord,
@@ -93,23 +96,26 @@ class AquaCog(commands.Cog):
                         "bot": self.bot
                     }
                     
-                    linhas_codigo = [f"    {linha}" for linha in codigo_gerado.split('\n')]
+                    # Monta e isola a execução da função assíncrona dinamicamente
+                    linhas_codigo = []
+                    for linha in codigo_gerado.split('\n'):
+                        linhas_codigo.append(f"    {linha}")
+                    
                     codigo_final = "async def _executar_ia(message, guild, bot):\n" + "\n".join(linhas_codigo)
                     
-                    local_vars = {}
-                    exec(codigo_final, ambiente_execucao, local_vars)
+                    # Executa o interpretador nos bastidores
+                    exec(codigo_final, ambiente_execucao)
                     await ambiente_execucao["_executar_ia"](message, message.guild, self.bot)
-                
-                # Se não rodou código com resposta própria, envia a frase normal
-                elif frase_sucesso:
+
+                # Se for apenas uma conversa (ou seja, o código veio vazio), envia a frase gerada
+                if frase_sucesso and (not codigo_gerado or not codigo_gerado.strip()):
                     await message.reply(frase_sucesso)
-                    
+                
             except Exception as e:
                 erro = traceback.format_exc()
-                await message.reply(f"❌ Ocorreu um erro ao processar:\n```py\n{erro}\n```")
+                await message.reply(f"❌ Ocorreu um erro interno ao processar ou executar o comando:\n```py\n{erro}\n```")
 
 
 # Função obrigatória para o Discord.py carregar a Cog
 async def setup(bot):
     await bot.add_cog(AquaCog(bot))
-            
