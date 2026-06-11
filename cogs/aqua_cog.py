@@ -92,11 +92,12 @@ class AquaCog(commands.Cog):
 
             # Mostra no Discord que ela está a "digitar" enquanto pensa
             async with message.channel.typing():
-                model = genai.GenerativeModel("gemini-1.5-pro")
+                # 🔥 CORREÇÃO REQUISITADA: Atualizado do gemini-1.5-pro antigo para o modelo suportado
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 
                 prompt_sistema = f"""
                 Você é a Aqua, uma inteligência artificial integrada como administradora deste servidor de Discord.
-                O utilizador deu-te a seguinte ordem em linguagem natural: "{message.content}"
+                O utilizador deu-te a seguinte ordem in linguagem natural: "{message.content}"
                 
                 Analise rigorosamente o pedido e responda ESTRITAMENTE em formato JSON com três chaves:
                 1. "explicacao": Uma frase curta em português explicando EXATAMENTE o que vais fazer com base apenas nos factos fornecidos. Não invente motivos ou contextos que não foram ditos.
@@ -146,3 +147,4 @@ class AquaCog(commands.Cog):
 # Função obrigatória para o Discord.py carregar a Cog
 async def setup(bot):
     await bot.add_cog(AquaCog(bot))
+            
