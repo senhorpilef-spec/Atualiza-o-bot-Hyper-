@@ -59,77 +59,54 @@ class AquaCog(commands.Cog):
         async with message.channel.typing():
             model = genai.GenerativeModel("gemini-2.5-flash")
             
-            # PROMPT ETAPA 1: Gerar estritamente o código de execução ou coleta de dados
-            prompt_codigo = f"""
-            Você é a Aqua, IA administradora do servidor de Discord.
-            O criador Geraldão enviou a seguinte mensagem: "{message.content}"
+            prompt_sistema = f"""
+            Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord.
+            O criador supremo Geraldão deu-te a seguinte ordem ou pergunta: "{message.content}"
             
-            Escreva um código em Python usando a biblioteca discord.py para realizar a ação solicitada ou coletar a informação técnica que ele pediu.
+            Responda ESTRITAMENTE em formato JSON com duas chaves:
+            1. "codigo": Código em Python puro usando discord.py para executar a ação ou responder à pergunta técnica (ex: se ele perguntar o dono, use `await message.reply(f"O dono é {{guild.owner.mention}}")`). Se for apenas uma conversa fiada/saudação sem necessidade de comandos, deixe vazio "".
+            2. "frase_sucesso": O texto normal de resposta conversacional que você enviará caso o "codigo" esteja vazio. Se o "codigo" já for enviar uma resposta técnica por conta própria, você pode deixar esta frase curta ou vazia.
             
-            Regras de Ouro:
-            - Você tem disponível: `message`, `guild` e `bot`.
-            - Se o comando pedir informações (ex: dono, membros, canais), você DEVE salvar o resultado numa variável chamada `resultado_ia`. Exemplo: `resultado_ia = f"O dono é {{guild.owner}}"`
-            - Se for apenas uma conversa simples (saudações, perguntas gerais), deixe o código completamente em branco.
-            - Responda APENAS com o código puro em formato JSON com a chave "codigo". Sem markdown (```py).
+            Regras:
+            - Variáveis disponíveis: `message`, `guild` e `bot`.
+            - Use `await` para funções assíncronas do discord.py.
+            - Nunca inclua marcações de markdown (```py) no JSON.
+            - Responda APENAS o JSON.
             """
             
             try:
-                response_cod = model.generate_content(
-                    prompt_codigo,
+                response = model.generate_content(
+                    prompt_sistema,
                     generation_config={"response_mime_type": "application/json"}
                 )
                 
-                dados_codigo = json.loads(response_cod.text)
-                codigo_gerado = dados_codigo.get("codigo", "")
+                dados_ia = json.loads(response.text)
+                codigo_gerado = dados_ia.get("codigo", "")
+                frase_sucesso = dados_ia.get("frase_sucesso", "")
                 
-                resultado_execucao = None
-                
-                # Se houver código, executa AGORA para obter o resultado antes de falar
+                # Executa o código se houver
                 if codigo_gerado and codigo_gerado.strip():
                     ambiente_execucao = {
                         "discord": discord,
                         "message": message,
                         "guild": message.guild,
-                        "bot": self.bot,
-                        "resultado_ia": None
+                        "bot": self.bot
                     }
                     
                     linhas_codigo = [f"    {linha}" for linha in codigo_gerado.split('\n')]
                     codigo_final = "async def _executar_ia(message, guild, bot):\n" + "\n".join(linhas_codigo)
                     
-                    # Compila e roda
                     local_vars = {}
                     exec(codigo_final, ambiente_execucao, local_vars)
-                    
-                    # Injeta a execução assíncrona
                     await ambiente_execucao["_executar_ia"](message, message.guild, self.bot)
-                    
-                    # Puxa o resultado modificado pelo código (se houver)
-                    if "resultado_ia" in ambiente_execucao and ambiente_execucao["resultado_ia"]:
-                        resultado_execucao = ambiente_execucao["resultado_ia"]
-
-                # PROMPT ETAPA 2: Gerar a resposta final em formato de chat conversacional
-                contexto_execucao = f"O código técnico foi rodado nos bastidores com sucesso. Resultado real obtido: {resultado_execucao}" if resultado_execucao else "Ação executada com sucesso ou foi apenas uma interação de conversa."
                 
-                prompt_texto = f"""
-                Você é a Aqua. Responda diretamente ao Geraldão sobre a mensagem dele: "{message.content}".
-                Contexto real do servidor agora: {contexto_execucao}
-                
-                Dê uma resposta natural, em formato de texto limpo de chat (sem embeds, sem formatações complexas). Se uma informação técnica foi coletada (como o nome do dono do servidor), use o dado fornecido no Contexto Real para responder de forma exata.
-                """
-                
-                response_texto = model.generate_content(prompt_texto)
-                resposta_final = response_texto.text.strip()
-                
-                # Envia a resposta limpa usando reply
-                if resposta_final:
-                    await message.reply(resposta_final)
-                else:
-                    await message.reply("Comando processado com sucesso, Geraldão!")
+                # Se não rodou código com resposta própria, envia a frase normal
+                elif frase_sucesso:
+                    await message.reply(frase_sucesso)
                     
             except Exception as e:
                 erro = traceback.format_exc()
-                await message.reply(f"❌ Ocorreu um erro interno ao processar ou executar o comando:\n```py\n{erro}\n```")
+                await message.reply(f"❌ Ocorreu um erro ao processar:\n```py\n{erro}\n```")
 
 
 # Função obrigatória para o Discord.py carregar a Cog
