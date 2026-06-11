@@ -1,17 +1,15 @@
 import discord
 from discord.ext import commands
-import google.generativeai as genai
+from groq import Groq
 import asyncio
 import traceback
 import os
 
-# 🔒 Puxando a chave de forma segura por variável de ambiente
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+# 🔒 Puxando a chave da Groq de forma segura por variável de ambiente
+GROQ_KEY = os.getenv("GROQ_API_KEY")
 
-if not GEMINI_KEY:
-    print("⚠️ AVISO: GEMINI_API_KEY não configurada nas variáveis de ambiente! A Aqua não vai funcionar.")
-else:
-    genai.configure(api_key=GEMINI_KEY)
+if not GROQ_KEY:
+    print("⚠️ AVISO: GROQ_API_KEY não configurada nas variáveis de ambiente! A Aqua não vai funcionar.")
 
 
 class AquaCog(commands.Cog):
@@ -19,7 +17,7 @@ class AquaCog(commands.Cog):
         self.bot = bot
         # 👑 ID EXCLUSIVO DO GERALDÃO (APENAS VOCÊ MANDA)
         self.CRIADOR_ID = 569633804537430036
-        print("🤖 [AquaCog] Sistema de Poder Absoluto e Anti-Spam Ativado!")
+        print("🤖 [AquaCog] Sistema Groq Sem Limites Iniciado para o Geraldão!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -47,14 +45,15 @@ class AquaCog(commands.Cog):
             await message.reply("Apenas o criador Geraldão pode usar a minha IA, pois executo ordens críticas.")
             return
 
-        if not GEMINI_KEY:
-            await message.reply("Erro: A chave de API da Aqua não foi configurada no sistema.")
+        if not GROQ_KEY:
+            await message.reply("Erro: A chave de API da Groq (GROQ_API_KEY) não foi configurada no sistema.")
             return
 
         # Mostra no Discord que ela está a responder (Modo Chat IA)
         async with message.channel.typing():
             try:
-                model = genai.GenerativeModel("gemini-2.5-flash")
+                # Inicializa o cliente da Groq
+                client = Groq(api_key=GROQ_KEY)
                 
                 prompt_sistema = f"""
                 Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord.
@@ -77,30 +76,25 @@ class AquaCog(commands.Cog):
                 - Nunca use blocos de código com markdown (```py) na área [CODIGO].
                 """
 
-                response = None
+                # Executa a chamada assíncrona para a Groq usando o super modelo Llama 3.3
                 loop = asyncio.get_event_loop()
+                
+                # Modelo de alta performance e gratuito da Meta distribuído pela Groq
+                chat_completion = await loop.run_in_executor(
+                    None, 
+                    lambda: client.chat.completions.create(
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": prompt_sistema,
+                            }
+                        ],
+                        model="llama-3.3-70b-versatile",
+                        temperature=0.3,
+                    )
+                )
 
-                # 🔥 SISTEMA ANTI-429 (Tenta até 3 vezes se bater no limite de 5 mensagens por minuto)
-                for tentativa in range(3):
-                    try:
-                        response = await asyncio.wait_for(
-                            loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
-                            timeout=20.0
-                        )
-                        break  # Se conseguiu responder, sai do loop de tentativas
-                    except Exception as e_api:
-                        if "429" in str(e_api) and tentativa < 2:
-                            # Se for erro de cota por minuto, espera 5 segundos e tenta de novo em segredo
-                            await asyncio.sleep(5)
-                            continue
-                        else:
-                            raise e_api
-
-                if not response:
-                    await message.reply("❌ Não foi possível obter resposta da API do Google após múltiplas tentativas.")
-                    return
-
-                resposta_completa = response.text
+                resposta_completa = chat_completion.choices[0].message.content
                 texto_final = ""
                 codigo_gerado = ""
                 
@@ -111,7 +105,7 @@ class AquaCog(commands.Cog):
                 else:
                     texto_final = resposta_completa.strip()
 
-                # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores de forma isolada
+                # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores
                 if codigo_gerado and codigo_gerado.strip():
                     ambiente_execucao = {
                         "discord": discord,
@@ -122,7 +116,6 @@ class AquaCog(commands.Cog):
                         "asyncio": asyncio
                     }
                     
-                    # Converte o código direto em uma função assíncrona de execução garantida
                     linhas_codigo = []
                     for linha in codigo_gerado.split('\n'):
                         linhas_codigo.append(f"    {linha}")
@@ -130,10 +123,7 @@ class AquaCog(commands.Cog):
                     codigo_final = "async def _executor_direto():\n" + "\n".join(linhas_codigo)
                     
                     try:
-                        # Executa a declaração da função dentro do dicionário nativo
                         exec(codigo_final, ambiente_execucao)
-                        
-                        # Extrai a função construída dinamicamente e executa de forma direta
                         funcao_assincrona = ambiente_execucao["_executor_direto"]
                         await funcao_assincrona()
                     except Exception as erro_execucao:
@@ -141,14 +131,14 @@ class AquaCog(commands.Cog):
                         await message.reply(f"❌ Erro na execução do script gerado:\n```py\n{erro_formatado}\n```")
                         return
 
-                # Se for apenas uma conversa ou comando silencioso, envia o texto conversacional
+                # Se for apenas uma conversa, envia o texto conversacional
                 if texto_final and texto_final.strip():
                     if not codigo_gerado or "message.reply" not in codigo_gerado:
                         await message.reply(texto_final)
                     
             except Exception as e:
                 erro = traceback.format_exc()
-                print(f"Erro interno na Aqua:\n{erro}")
+                print(f"Erro interno na Aqua (Groq):\n{erro}")
                 await message.reply(f"❌ Ocorreu um erro estrutural ao processar:\n```py\n{str(e)}\n```")
 
 
