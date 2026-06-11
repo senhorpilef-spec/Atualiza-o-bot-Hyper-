@@ -26,14 +26,14 @@ class AquaCog(commands.Cog):
         if message.author.bot:
             return
 
-        # Verificar se a mensagem é um gatilho para a Aqua
+        # 2. Verificar se a mensagem é um gatilho para a Aqua
         e_gatilho_aqua = False
         
         # Cenário A: O nome Aqua está na mensagem
         if "aqua" in message.content.lower():
             e_gatilho_aqua = True
             
-        # Cenário B: É um Reply (resposta) para uma mensagem que a própria Aqua mandao
+        # Cenário B: É um Reply (resposta) para uma mensagem que a própria Aqua mandou
         elif message.reference and message.reference.message_id:
             try:
                 msg_respondida = await message.channel.fetch_message(message.reference.message_id)
@@ -42,7 +42,7 @@ class AquaCog(commands.Cog):
             except:
                 pass
 
-        # Se não mencionou a Aqua e não é um Reply para ela, ignora e segue em frente
+        # Se não é para a Aqua, ignora completamente
         if not e_gatilho_aqua:
             return
 
@@ -55,63 +55,78 @@ class AquaCog(commands.Cog):
             await message.reply("Erro: A chave de API da Aqua não foi configurada no sistema.")
             return
 
-        # Mostra no Discord que ela está a responder (Modo Chat IA)
+        # Mostra no Discord que ela está a processar
         async with message.channel.typing():
             model = genai.GenerativeModel("gemini-2.5-flash")
             
-            prompt_sistema = f"""
-            Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord.
-            O criador supremo Geraldão deu-te a seguinte ordem ou pergunta em linguagem natural: "{message.content}"
+            # PROMPT ETAPA 1: Gerar estritamente o código de execução ou coleta de dados
+            prompt_codigo = f"""
+            Você é a Aqua, IA administradora do servidor de Discord.
+            O criador Geraldão enviou a seguinte mensagem: "{message.content}"
             
-            Analise rigorosamente o pedido e responda ESTRITAMENTE em formato JSON com duas chaves:
-            1. "codigo": Linhas de código limpas em Python puro utilizando a biblioteca discord.py para realizar rigorosamente a ação solicitada ou buscar a informação técnica que ele quer saber.
-            2. "frase_sucesso": Uma resposta em formato de texto normal (estilo IA conversacional) conversando diretamente com o Geraldão, informando de forma natural o que foi feito ou respondendo diretamente à pergunta dele com os dados obtidos.
+            Escreva um código em Python usando a biblioteca discord.py para realizar a ação solicitada ou coletar a informação técnica que ele pediu.
             
-            Regras cruciais para buscar informações ou executar ações no "codigo":
-            - Você tem disponíveis as variáveis: `message` (objeto da mensagem), `guild` (objeto do servidor) e `bot` (objeto do bot).
-            - Se ele perguntar algo sobre o servidor (ex: quem é o dono/posse, quantos membros têm, quando foi criado), use o código para extrair isso e envie o texto final em "frase_sucesso". Exemplo de lógica para posse: `guild.owner`.
-            - Use `await` para todas as funções assíncronas do discord.py.
-            - Se precisar usar loops, certifique-se de manter a indentação correta em Python.
-            - Nunca inclua marcações de markdown (como ```py) dentro do valor do JSON.
-            - Se o pedido for apenas uma conversa que não dependa de dados do servidor ou ações, deixe a chave "codigo" totalmente vazia ("").
-            
-            Responda APENAS o JSON estruturado, sem nenhum texto antes ou depois dele.
+            Regras de Ouro:
+            - Você tem disponível: `message`, `guild` e `bot`.
+            - Se o comando pedir informações (ex: dono, membros, canais), você DEVE salvar o resultado numa variável chamada `resultado_ia`. Exemplo: `resultado_ia = f"O dono é {{guild.owner}}"`
+            - Se for apenas uma conversa simples (saudações, perguntas gerais), deixe o código completamente em branco.
+            - Responda APENAS com o código puro em formato JSON com a chave "codigo". Sem markdown (```py).
             """
             
             try:
-                response = model.generate_content(
-                    prompt_sistema,
+                response_cod = model.generate_content(
+                    prompt_codigo,
                     generation_config={"response_mime_type": "application/json"}
                 )
                 
-                # Desembrulha o JSON retornado pela IA
-                dados_ia = json.loads(response.text)
-                codigo_gerado = dados_ia.get("codigo", "")
-                frase_sucesso = dados_ia.get("frase_sucesso", "Ordem processada.")
+                dados_codigo = json.loads(response_cod.text)
+                codigo_gerado = dados_codigo.get("codigo", "")
                 
-                # Se houver código técnico para executar ou buscar informações, roda IMEDIATAMENTE
+                resultado_execucao = None
+                
+                # Se houver código, executa AGORA para obter o resultado antes de falar
                 if codigo_gerado and codigo_gerado.strip():
                     ambiente_execucao = {
                         "discord": discord,
                         "message": message,
                         "guild": message.guild,
-                        "bot": self.bot
+                        "bot": self.bot,
+                        "resultado_ia": None
                     }
                     
-                    # Monta e isola a execução da função assíncrona dinamicamente
-                    linhas_codigo = []
-                    for linha in codigo_gerado.split('\n'):
-                        linhas_codigo.append(f"    {linha}")
-                    
+                    linhas_codigo = [f"    {linha}" for linha in codigo_gerado.split('\n')]
                     codigo_final = "async def _executar_ia(message, guild, bot):\n" + "\n".join(linhas_codigo)
                     
-                    # Executa o interpretador nos bastidores
-                    exec(codigo_final, ambiente_execucao)
+                    # Compila e roda
+                    local_vars = {}
+                    exec(codigo_final, ambiente_execucao, local_vars)
+                    
+                    # Injeta a execução assíncrona
                     await ambiente_execucao["_executar_ia"](message, message.guild, self.bot)
+                    
+                    # Puxa o resultado modificado pelo código (se houver)
+                    if "resultado_ia" in ambiente_execucao and ambiente_execucao["resultado_ia"]:
+                        resultado_execucao = ambiente_execucao["resultado_ia"]
 
-                # Dá o .reply direto com o texto natural da IA (Sem Embed, Sem Detalhes Técnicos)
-                await message.reply(frase_sucesso)
+                # PROMPT ETAPA 2: Gerar a resposta final em formato de chat conversacional
+                contexto_execucao = f"O código técnico foi rodado nos bastidores com sucesso. Resultado real obtido: {resultado_execucao}" if resultado_execucao else "Ação executada com sucesso ou foi apenas uma interação de conversa."
                 
+                prompt_texto = f"""
+                Você é a Aqua. Responda diretamente ao Geraldão sobre a mensagem dele: "{message.content}".
+                Contexto real do servidor agora: {contexto_execucao}
+                
+                Dê uma resposta natural, em formato de texto limpo de chat (sem embeds, sem formatações complexas). Se uma informação técnica foi coletada (como o nome do dono do servidor), use o dado fornecido no Contexto Real para responder de forma exata.
+                """
+                
+                response_texto = model.generate_content(prompt_texto)
+                resposta_final = response_texto.text.strip()
+                
+                # Envia a resposta limpa usando reply
+                if resposta_final:
+                    await message.reply(resposta_final)
+                else:
+                    await message.reply("Comando processado com sucesso, Geraldão!")
+                    
             except Exception as e:
                 erro = traceback.format_exc()
                 await message.reply(f"❌ Ocorreu um erro interno ao processar ou executar o comando:\n```py\n{erro}\n```")
