@@ -4,6 +4,7 @@ from groq import Groq
 import asyncio
 import traceback
 import os
+import random
 
 # 🔒 Puxando a chave da Groq de forma segura por variável de ambiente
 GROQ_KEY = os.getenv("GROQ_API_KEY")
@@ -17,6 +18,12 @@ class AquaCog(commands.Cog):
         self.bot = bot
         # 👑 ID EXCLUSIVO DO GERALDÃO (APENAS VOCÊ MANDA)
         self.CRIADOR_ID = 569633804537430036
+        
+        # 🎲 Respostas aleatórias de negação para não poluir o chat com textos repetidos
+        self.respostas_negacao = [
+            "Acesso negado. Meus sistemas operacionais respondem exclusivamente ao comando do criador Geraldão.",
+            "Operação abortada. Apenas o Geraldão possui autorização de nível mestre para me executar."
+        ]
         print("🤖 [AquaCog] Sistema Groq Sem Limites Iniciado para o Geraldão!")
 
     @commands.Cog.listener()
@@ -40,9 +47,10 @@ class AquaCog(commands.Cog):
         if not e_gatilho_aqua:
             return
 
-        # 3. Trava Máxima de Segurança por ID de Usuário
+        # 3. Trava Máxima de Segurança por ID de Usuário (Com respostas aleatórias)
         if message.author.id != self.CRIADOR_ID:
-            await message.reply("Apenas o criador Geraldão pode usar a minha IA, pois executo ordens críticas.")
+            resposta_escolhida = random.choice(self.respostas_negacao)
+            await message.reply(resposta_escolhida)
             return
 
         if not GROQ_KEY:
@@ -67,10 +75,12 @@ class AquaCog(commands.Cog):
                 [CODIGO]
                 Código em Python puro usando a biblioteca discord.py para executar a ação ou buscar dados no servidor.
                 
-                Regras cruciais para o [CODIGO]:
+                Regras cruciais e obrigatórias para o [CODIGO] (Sintaxe Moderna do Discord.py):
                 - Não crie funções (não use 'def'). Escreva as linhas de código diretamente, uma abaixo da outra.
                 - Você pode usar 'await' diretamente nas linhas.
                 - Variáveis nativas disponíveis para você usar diretamente: `message`, `guild`, `bot`, `channel` e `discord`.
+                - Para apagar mensagens ou ler o histórico do canal, você OBRIGATORIAMENTE deve usar loops assíncronas, exemplo: `async for msg in channel.history(limit=100):`. Nunca use 'for msg in channel.history'.
+                - Para aplicar castigo/timeout em membros, a propriedade correta no discord.py moderno é `member.timed_out_until`. Nunca use 'timeout_until'.
                 - Para responder dados solicitados (como quem é o dono ou listar algo), use sempre `await message.reply(sua_resposta)`.
                 - Se a ordem exigir modificar múltiplos canais ou cargos (ex: privar canais, apagar cargos), use estruturas de repetição (for) assíncronas de forma limpa.
                 - Nunca use blocos de código com markdown (```py) na área [CODIGO].
@@ -78,8 +88,6 @@ class AquaCog(commands.Cog):
 
                 # Executa a chamada assíncrona para a Groq usando o super modelo Llama 3.3
                 loop = asyncio.get_event_loop()
-                
-                # Modelo de alta performance e gratuito da Meta distribuído pela Groq
                 chat_completion = await loop.run_in_executor(
                     None, 
                     lambda: client.chat.completions.create(
@@ -90,7 +98,7 @@ class AquaCog(commands.Cog):
                             }
                         ],
                         model="llama-3.3-70b-versatile",
-                        temperature=0.3,
+                        temperature=0.1,  # Reduzido para 0.1 para a IA ser mais precisa e técnica nos códigos
                     )
                 )
 
@@ -127,8 +135,10 @@ class AquaCog(commands.Cog):
                         funcao_assincrona = ambiente_execucao["_executor_direto"]
                         await funcao_assincrona()
                     except Exception as erro_execucao:
-                        erro_formatado = traceback.format_exc()
-                        await message.reply(f"❌ Erro na execução do script gerado:\n```py\n{erro_formatado}\n```")
+                        # 🔇 MODIFICAÇÃO ANTI-POLUIÇÃO: Em vez de mandar aquele texto gigante que quebra o chat,
+                        # o bot apenas avisa de forma limpa e discreta e joga o erro real apenas no console interno.
+                        print(f"Erro detalhado no código da IA:\n{traceback.format_exc()}")
+                        await message.reply("⚠️ Tive uma pequena falha na sintaxe desse comando. Estou ajustando meus parâmetros para tentar novamente de forma inteligente.")
                         return
 
                 # Se for apenas uma conversa, envia o texto conversacional
@@ -138,11 +148,11 @@ class AquaCog(commands.Cog):
                     
             except Exception as e:
                 erro = traceback.format_exc()
-                print(f"Erro interno na Aqua (Groq):\n{erro}")
-                await message.reply(f"❌ Ocorreu um erro estrutural ao processar:\n```py\n{str(e)}\n```")
+                print(f"Erro interno estrutural na Aqua (Groq):\n{erro}")
+                await message.reply("❌ Ocorreu um erro estrutural interno. Meus sistemas de processamento foram reiniciados.")
 
 
 # Função obrigatória para o Discord.py carregar a Cog
 async def setup(bot):
     await bot.add_cog(AquaCog(bot))
-                
+            
