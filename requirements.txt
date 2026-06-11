@@ -3,3 +3,4 @@ pymongo==4.6.1
 psutil>=5.9.0
 Pillow>=10.4.0
 aiohttp>=3.9.0
+audioop-lts; python_version >= "3.13"
