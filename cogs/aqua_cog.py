@@ -19,7 +19,7 @@ class AquaCog(commands.Cog):
         self.bot = bot
         # 👑 ID EXCLUSIVO DO GERALDÃO (APENAS VOCÊ MANDA)
         self.CRIADOR_ID = 569633804537430036
-        print("🤖 [AquaCog] Sistema de Poder Absoluto Iniciado para o Geraldão!")
+        print("🤖 [AquaCog] Sistema de Poder Absoluto e Anti-Spam Ativado!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -29,12 +29,8 @@ class AquaCog(commands.Cog):
 
         # 2. Verificar se a mensagem é um gatilho para a Aqua
         e_gatilho_aqua = False
-        
-        # Cenário A: O nome Aqua está na mensagem
         if "aqua" in message.content.lower():
             e_gatilho_aqua = True
-            
-        # Cenário B: É um Reply (resposta) para uma mensagem que a própria Aqua mandou
         elif message.reference and message.reference.message_id:
             try:
                 msg_respondida = await message.channel.fetch_message(message.reference.message_id)
@@ -43,7 +39,6 @@ class AquaCog(commands.Cog):
             except:
                 pass
 
-        # Se não é para a Aqua, ignora completamente
         if not e_gatilho_aqua:
             return
 
@@ -59,7 +54,6 @@ class AquaCog(commands.Cog):
         # Mostra no Discord que ela está a responder (Modo Chat IA)
         async with message.channel.typing():
             try:
-                # 🚀 Modelo Oficial Atualizado da API do Google
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 
                 prompt_sistema = f"""
@@ -83,22 +77,33 @@ class AquaCog(commands.Cog):
                 - Nunca use blocos de código com markdown (```py) na área [CODIGO].
                 """
 
-                # 🛠️ Executa a chamada da API do Google em segundo plano para não congelar o Discord
+                response = None
                 loop = asyncio.get_event_loop()
-                try:
-                    response = await asyncio.wait_for(
-                        loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
-                        timeout=20.0
-                    )
-                except asyncio.TimeoutError:
-                    await message.reply("⏳ A API do Gemini demorou muito para responder. Tente de novo.")
+
+                # 🔥 SISTEMA ANTI-429 (Tenta até 3 vezes se bater no limite de 5 mensagens por minuto)
+                for tentativa in range(3):
+                    try:
+                        response = await asyncio.wait_for(
+                            loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
+                            timeout=20.0
+                        )
+                        break  # Se conseguiu responder, sai do loop de tentativas
+                    except Exception as e_api:
+                        if "429" in str(e_api) and tentativa < 2:
+                            # Se for erro de cota por minuto, espera 5 segundos e tenta de novo em segredo
+                            await asyncio.sleep(5)
+                            continue
+                        else:
+                            raise e_api
+
+                if not response:
+                    await message.reply("❌ Não foi possível obter resposta da API do Google após múltiplas tentativas.")
                     return
 
                 resposta_completa = response.text
                 texto_final = ""
                 codigo_gerado = ""
                 
-                # Divisão segura do conteúdo gerado
                 if "|||" in resposta_completa:
                     partes = resposta_completa.split("|||")
                     texto_final = partes[0].replace("[TEXTO]", "").strip()
@@ -108,7 +113,6 @@ class AquaCog(commands.Cog):
 
                 # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores de forma isolada
                 if codigo_gerado and codigo_gerado.strip():
-                    # Ambiente global e local unificados para evitar sumiço de variáveis
                     ambiente_execucao = {
                         "discord": discord,
                         "message": message,
@@ -118,22 +122,27 @@ class AquaCog(commands.Cog):
                         "asyncio": asyncio
                     }
                     
-                    # Converte o código direto em uma função assíncrona temporária estável
-                    linhas_codigo = [f"    {linha}" for linha in codigo_gerado.split('\n')]
+                    # Converte o código direto em uma função assíncrona de execução garantida
+                    linhas_codigo = []
+                    for linha in codigo_gerado.split('\n'):
+                        linhas_codigo.append(f"    {linha}")
+                            
                     codigo_final = "async def _executor_direto():\n" + "\n".join(linhas_codigo)
                     
                     try:
+                        # Executa a declaração da função dentro do dicionário nativo
                         exec(codigo_final, ambiente_execucao)
-                        # Executa a tarefa em segundo plano de forma nativa e assíncrona
-                        await ambiente_execucao["_executor_direto"]()
+                        
+                        # Extrai a função construída dinamicamente e executa de forma direta
+                        funcao_assincrona = ambiente_execucao["_executor_direto"]
+                        await funcao_assincrona()
                     except Exception as erro_execucao:
                         erro_formatado = traceback.format_exc()
                         await message.reply(f"❌ Erro na execução do script gerado:\n```py\n{erro_formatado}\n```")
                         return
 
-                # Se for apenas uma conversa ou se o código executou silenciosamente, envia o texto conversacional
+                # Se for apenas uma conversa ou comando silencioso, envia o texto conversacional
                 if texto_final and texto_final.strip():
-                    # Só envia se não for repetição ou se não houver código de resposta direta executado
                     if not codigo_gerado or "message.reply" not in codigo_gerado:
                         await message.reply(texto_final)
                     
