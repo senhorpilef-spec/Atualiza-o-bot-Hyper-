@@ -19,7 +19,7 @@ class AquaCog(commands.Cog):
         self.bot = bot
         # 👑 ID EXCLUSIVO DO GERALDÃO (APENAS VOCÊ MANDA)
         self.CRIADOR_ID = 569633804537430036
-        print("🤖 [AquaCog] Carregada com sucesso e pronta para o Geraldão!")
+        print("🤖 [AquaCog] Sistema de Poder Absoluto Iniciado para o Geraldão!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -69,17 +69,18 @@ class AquaCog(commands.Cog):
                 Sua resposta deve seguir OBRIGATORIAMENTE este formato exato separados por |||:
                 
                 [TEXTO]
-                Sua resposta conversacional normal aqui, conversando diretamente com o Geraldão.
+                Sua resposta conversacional curta reconhecendo a ordem do Geraldão.
                 |||
                 [CODIGO]
                 Código em Python puro usando a biblioteca discord.py para executar a ação ou buscar dados no servidor.
                 
-                Regras cruciais:
-                - Se ele pedir para buscar uma informação (ex: quem é o dono), use o código para responder direto com `await message.reply()`. Se fizer isso, deixe a área [TEXTO] curta ou vazia.
-                - Se for apenas uma conversa fiada ou saudação, deixe a área [CODIGO] totalmente vazia.
-                - Variáveis disponíveis: `message`, `guild` e `bot`.
+                Regras cruciais para o [CODIGO]:
+                - Não crie funções (não use 'def'). Escreva as linhas de código diretamente, uma abaixo da outra.
+                - Você pode usar 'await' diretamente nas linhas.
+                - Variáveis nativas disponíveis para você usar diretamente: `message`, `guild`, `bot`, `channel` e `discord`.
+                - Para responder dados solicitados (como quem é o dono ou listar algo), use sempre `await message.reply(sua_resposta)`.
+                - Se a ordem exigir modificar múltiplos canais ou cargos (ex: privar canais, apagar cargos), use estruturas de repetição (for) assíncronas de forma limpa.
                 - Nunca use blocos de código com markdown (```py) na área [CODIGO].
-                - Use `await` para funções assíncronas do discord.py.
                 """
 
                 # 🛠️ Executa a chamada da API do Google em segundo plano para não congelar o Discord
@@ -87,7 +88,7 @@ class AquaCog(commands.Cog):
                 try:
                     response = await asyncio.wait_for(
                         loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
-                        timeout=15.0
+                        timeout=20.0
                     )
                 except asyncio.TimeoutError:
                     await message.reply("⏳ A API do Gemini demorou muito para responder. Tente de novo.")
@@ -105,35 +106,41 @@ class AquaCog(commands.Cog):
                 else:
                     texto_final = resposta_completa.strip()
 
-                # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores
+                # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores de forma isolada
                 if codigo_gerado and codigo_gerado.strip():
+                    # Ambiente global e local unificados para evitar sumiço de variáveis
                     ambiente_execucao = {
                         "discord": discord,
                         "message": message,
                         "guild": message.guild,
-                        "bot": self.bot
+                        "channel": message.channel,
+                        "bot": self.bot,
+                        "asyncio": asyncio
                     }
                     
-                    # Formatação corrigida das linhas do código dinâmico
-                    linhas_codigo = []
-                    for linha in codigo_gerado.split('\n'):
-                        if linha.strip() or linha == '':
-                            linhas_codigo.append(f"    {linha}")
-                            
-                    codigo_final = "async def _executar_ia(message, guild, bot):\n" + "\n".join(linhas_codigo)
+                    # Converte o código direto em uma função assíncrona temporária estável
+                    linhas_codigo = [f"    {linha}" for linha in codigo_gerado.split('\n')]
+                    codigo_final = "async def _executor_direto():\n" + "\n".join(linhas_codigo)
                     
-                    local_vars = {}
-                    exec(codigo_final, ambiente_execucao, local_vars)
-                    await asyncio.create_task(ambiente_execucao["_executar_ia"](message, message.guild, self.bot))
+                    try:
+                        exec(codigo_final, ambiente_execucao)
+                        # Executa a tarefa em segundo plano de forma nativa e assíncrona
+                        await ambiente_execucao["_executor_direto"]()
+                    except Exception as erro_execucao:
+                        erro_formatado = traceback.format_exc()
+                        await message.reply(f"❌ Erro na execução do script gerado:\n```py\n{erro_formatado}\n```")
+                        return
 
-                # Se for apenas uma conversa normal, envia o texto conversacional
-                if texto_final and texto_final.strip() and (not codigo_gerado or not codigo_gerado.strip()):
-                    await message.reply(texto_final)
+                # Se for apenas uma conversa ou se o código executou silenciosamente, envia o texto conversacional
+                if texto_final and texto_final.strip():
+                    # Só envia se não for repetição ou se não houver código de resposta direta executado
+                    if not codigo_gerado or "message.reply" not in codigo_gerado:
+                        await message.reply(texto_final)
                     
             except Exception as e:
                 erro = traceback.format_exc()
                 print(f"Erro interno na Aqua:\n{erro}")
-                await message.reply(f"❌ Ocorreu um erro interno ao processar:\n```py\n{str(e)}\n```")
+                await message.reply(f"❌ Ocorreu um erro estrutural ao processar:\n```py\n{str(e)}\n```")
 
 
 # Função obrigatória para o Discord.py carregar a Cog
