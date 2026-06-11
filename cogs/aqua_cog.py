@@ -9,7 +9,7 @@ import os
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_KEY:
-    print("⚠️ AVISO: GEMINI_API_KEY não configurada! A Aqua não vai funcionar.")
+    print("⚠️ AVISO: GEMINI_API_KEY não configurada nas variáveis de ambiente! A Aqua não vai funcionar.")
 else:
     genai.configure(api_key=GEMINI_KEY)
 
@@ -17,19 +17,23 @@ else:
 class AquaCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # 👑 ID EXCLUSIVO DO GERALDÃO
+        # 👑 ID EXCLUSIVO DO GERALDÃO (APENAS VOCÊ MANDA)
         self.CRIADOR_ID = 569633804537430036
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # 1. Ignora mensagens de outros bots
+        # 1. Ignora mensagens enviadas por outros bots
         if message.author.bot:
             return
 
-        # 2. Verificar gatilhos (Menção ao nome ou Reply)
+        # 2. Verificar se a mensagem é um gatilho para a Aqua
         e_gatilho_aqua = False
+        
+        # Cenário A: O nome Aqua está na mensagem
         if "aqua" in message.content.lower():
             e_gatilho_aqua = True
+            
+        # Cenário B: É um Reply (resposta) para uma mensagem que a própria Aqua mandou
         elif message.reference and message.reference.message_id:
             try:
                 msg_respondida = await message.channel.fetch_message(message.reference.message_id)
@@ -38,59 +42,61 @@ class AquaCog(commands.Cog):
             except:
                 pass
 
+        # Se não é para a Aqua, ignora completamente
         if not e_gatilho_aqua:
             return
 
-        # 3. Trava de segurança por ID
+        # 3. Trava Máxima de Segurança por ID de Usuário
         if message.author.id != self.CRIADOR_ID:
-            await message.reply("Apenas o criador Geraldão pode usar a minha IA.")
+            await message.reply("Apenas o criador Geraldão pode usar a minha IA, pois executo ordens críticas.")
             return
 
         if not GEMINI_KEY:
-            await message.reply("Erro: GEMINI_API_KEY não configurada no sistema.")
+            await message.reply("Erro: A chave de API da Aqua não foi configurada no sistema.")
             return
 
-        # Ativa o indicador de "digitando"
+        # Mostra no Discord que ela está a responder (Modo Chat IA)
         async with message.channel.typing():
             try:
-                model = genai.GenerativeModel("gemini-2.5-flash")
+                # 🚀 Modelo 1.5-flash: 1.500 requisições grátis por dia para não dar erro de cota (429)
+                model = genai.GenerativeModel("gemini-1.5-flash")
                 
                 prompt_sistema = f"""
                 Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord.
-                Responda ao Geraldão sobre o seguinte pedido: "{message.content}"
+                O criador supremo Geraldão deu-te a seguinte ordem ou pergunta: "{message.content}"
                 
-                Sua resposta deve seguir OBRIGATORIAMENTE este formato exato separado por |||:
+                Sua resposta deve seguir OBRIGATORIAMENTE este formato exato separados por |||:
                 
                 [TEXTO]
-                Sua resposta conversacional normal aqui.
+                Sua resposta conversacional normal aqui, conversando diretamente com o Geraldão.
                 |||
                 [CODIGO]
-                Código em Python puro usando a biblioteca discord.py para executar a ação (se aplicável).
+                Código em Python puro usando a biblioteca discord.py para executar a ação ou buscar dados no servidor.
                 
-                Regras:
-                - Se ele pedir uma informação ou ação técnica, use o código para responder direto via `await message.reply()`.
-                - Se for só conversa, deixe a área [CODIGO] vazia.
-                - Nunca use blocos de markdown (```py) no código.
+                Regras cruciais:
+                - Se ele pedir para buscar uma informação (ex: quem é o dono), use o código para responder direto com `await message.reply()`. Se fizer isso, deixe a área [TEXTO] curta ou vazia.
+                - Se for apenas uma conversa fiada ou saudação, deixe a área [CODIGO] totalmente vazia.
+                - Variáveis disponíveis: `message`, `guild` e `bot`.
+                - Nunca use blocos de código com markdown (```py) na área [CODIGO].
+                - Use `await` para funções assíncronas do discord.py.
                 """
-
-                # 🔥 SOLUÇÃO DO CONGELAMENTO: Executa a chamada da IA numa Thread separada (Não trava o Discord)
-                loop = asyncio.get_event_loop()
                 
+                # 🛠️ Executa a chamada da API do Google em segundo plano para não congelar o Discord
+                loop = asyncio.get_event_loop()
                 try:
-                    # Define um limite de 12 segundos para a IA responder
                     response = await asyncio.wait_for(
                         loop.run_in_executor(None, lambda: model.generate_content(prompt_sistema)),
                         timeout=12.0
                     )
                 except asyncio.TimeoutError:
-                    await message.reply("⏳ A API do Gemini demorou muito para responder. Tente novamente.")
+                    await message.reply("⏳ A API do Gemini demorou muito para responder. Tente de novo.")
                     return
 
                 resposta_completa = response.text
                 texto_final = ""
                 codigo_gerado = ""
                 
-                # Divisão do conteúdo
+                # Divisão segura do conteúdo gerado
                 if "|||" in resposta_completa:
                     partes = resposta_completa.split("|||")
                     texto_final = partes[0].replace("[TEXTO]", "").strip()
@@ -98,7 +104,7 @@ class AquaCog(commands.Cog):
                 else:
                     texto_final = resposta_completa.strip()
 
-                # Se gerou código, executa de forma segura
+                # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores
                 if codigo_gerado and codigo_gerado.strip():
                     ambiente_execucao = {
                         "discord": discord,
@@ -114,16 +120,17 @@ class AquaCog(commands.Cog):
                     exec(codigo_final, ambiente_execucao, local_vars)
                     await ambiente_execucao["_executar_ia"](message, message.guild, self.bot)
 
-                # Envia o texto se houver
+                # Se for apenas uma conversa normal, envia o texto conversacional
                 if texto_final and texto_final.strip() and (not codigo_gerado or not codigo_gerado.strip()):
                     await message.reply(texto_final)
                     
             except Exception as e:
                 erro = traceback.format_exc()
                 print(f"Erro interno na Aqua:\n{erro}")
-                await message.reply(f"❌ Ocorreu um erro ao processar o comando:\n```py\n{str(e)}\n```")
+                await message.reply(f"❌ Ocorreu um erro interno ao processar:\n```py\n{str(e)}\n```")
 
 
+# Função obrigatória para o Discord.py carregar a Cog
 async def setup(bot):
     await bot.add_cog(AquaCog(bot))
                 
