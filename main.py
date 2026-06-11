@@ -37,7 +37,7 @@ try:
     
     db = mongo_client["bot"]
     votacoes_db = db["votacoes"]
-    print("✅ Conexão com o MongoDB estabelecida com sucesso!")
+    print("✅ Conexão com o MongoDB established com sucesso!")
 except Exception as e:
     print(f"❌ ERRO CRÍTICO: Não foi possível conectar ao MongoDB!")
     print(f"Detalhes do erro: {e}")
@@ -232,6 +232,7 @@ async def on_message(message):
                     except:
                         pass
 
+                    # 🔥 CORREÇÃO: Permite que os outros comandos e listeners de Cogs rodem antes do return
                     await bot.process_commands(message)
                     return
 
@@ -254,6 +255,7 @@ async def on_message(message):
 
             mensagens_usuario[message.author.id].clear()
 
+            # 🔥 CORREÇÃO: Permite processamento nas cogs antes de encerrar
             await bot.process_commands(message)
             return
 
@@ -273,6 +275,7 @@ async def on_message(message):
             except:
                 pass
 
+            # 🔥 CORREÇÃO: Repassa para a árvore de Cogs
             await bot.process_commands(message)
             return
 
@@ -288,9 +291,11 @@ async def on_message(message):
         except Exception as e:
             print("Erro ao criar tópico:", e)
 
+        # 🔥 CORREÇÃO: Repassa o evento antes de fechar o bloco do canal permitido
         await bot.process_commands(message)
         return
 
+    # 🚀 Execução padrão para processar comandos normais E gatilhos de Cog (como o on_message da Aqua)
     await bot.process_commands(message)
 
 # ===============================
@@ -340,3 +345,4 @@ async def setup_hook():
 
 if __name__ == "__main__":
     bot.run(TOKEN)
+    
