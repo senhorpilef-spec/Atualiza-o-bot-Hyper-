@@ -17,6 +17,7 @@ class AquaCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # 👑 ID EXCLUSIVO DO GERALDÃO
+        self.CRIALOG_ID = 569633804537430036
         self.CRIADOR_ID = 569633804537430036
         
         # 🛡️ Sistema de controle anti-flood para usuários não autorizados
@@ -27,7 +28,7 @@ class AquaCog(commands.Cog):
             "Acesso negado. O Geraldão é o dono deste bot e apenas ele tem permissão para usá-lo.",
             "Comando cancelado. Este sistema responde apenas às ordens do dono, o Geraldão."
         ]
-        print("🤖 [AquaCog] Sistema Groq de Poder Absoluto e Anti-Flood Iniciado!")
+        print("🤖 [AquaCog] Sistema Groq de Alta Criatividade e Inteligência Iniciado!")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -53,15 +54,11 @@ class AquaCog(commands.Cog):
         # 3. Trava Máxima de Segurança por ID de Usuário (Com limite de 2 respostas anti-flood)
         if message.author.id != self.CRIADOR_ID:
             user_id = message.author.id
-            
-            # Conta quantas vezes o usuário tentou usar a IA
             vezes_usadas = self.tentativas_usuarios.get(user_id, 0)
             
             if vezes_usadas >= 2:
-                # Se já atingiu o limite de 2 respostas, o bot ignora silenciosamente para não floodar
                 return
             
-            # Registra mais uma tentativa e envia a resposta aleatória direta
             self.tentativas_usuarios[user_id] = vezes_usadas + 1
             resposta_escolhida = random.choice(self.respostas_negacao)
             await message.reply(resposta_escolhida)
@@ -77,14 +74,23 @@ class AquaCog(commands.Cog):
                 # Inicializa o cliente da Groq
                 client = Groq(api_key=GROQ_KEY)
                 
+                # 🔥 Elemento de variação única gerado a cada mensagem para forçar respostas dinâmicas e evitar repetições
+                semente_aleatoria = random.randint(1, 100000)
+                
                 prompt_sistema = f"""
-                Você é a Aqua, uma inteligência artificial administradora integrada diretamente no servidor de Discord com poder total.
+                [ID de Variabilidade da Conversa: {semente_aleatoria}]
+                Você é a Aqua, uma inteligência artificial administradora viva, dinâmica e perspicaz integrada diretamente no servidor de Discord com poder total.
                 O dono do bot, Geraldão, deu-te a seguinte ordem ou pergunta: "{message.content}"
+                
+                Instruções de Personalidade:
+                - Nunca repita frases feitas ou respostas anteriores de forma mecânica. 
+                - Varie o vocabulário, seja expressiva, use humor ou seriedade dependendo do que ele falar.
+                - Responda como se estivesse processando os pensamentos de forma orgânica e em tempo real.
                 
                 Sua resposta deve seguir OBRIGATORIAMENTE este formato exato separados por |||:
                 
                 [TEXTO]
-                Sua resposta conversacional curta reconhecendo a ordem do Geraldão.
+                Sua resposta conversacional criativa, variada e natural direcionada ao Geraldão.
                 |||
                 [CODIGO]
                 Código em Python puro usando a biblioteca discord.py para executar a ação ou buscar dados no servidor.
@@ -98,10 +104,10 @@ class AquaCog(commands.Cog):
                 - Para aplicar castigo/timeout em membros, a propriedade correta no discord.py moderno é `member.timed_out_until`. Nunca use 'timeout_until'.
                 - Para responder dados solicitados (como quem é o dono ou listar algo), use sempre `await message.reply(sua_resposta)`.
                 - Se a ordem exigir modificar múltiplos canais ou cargos (ex: privar canais, apagar cargos), use estruturas de repetição (for) assíncronas de forma limpa.
-                - Nunca use blocks de código com markdown (```py) na área [CODIGO].
+                - Nunca use blocos de código com markdown (```py) na área [CODIGO].
                 """
 
-                # Executa a chamada assíncrona para a Groq usando o super modelo Llama 3.3
+                # Executa a chamada assíncrona para a Groq usando o modelo Llama 3.3
                 loop = asyncio.get_event_loop()
                 chat_completion = await loop.run_in_executor(
                     None, 
@@ -113,7 +119,7 @@ class AquaCog(commands.Cog):
                             }
                         ],
                         model="llama-3.3-70b-versatile",
-                        temperature=0.1,
+                        temperature=0.7, # 🚀 Elevado para 0.7 para quebrar o padrão repetitivo e robótico
                     )
                 )
 
@@ -146,7 +152,6 @@ class AquaCog(commands.Cog):
                     codigo_final = "async def _executor_direto():\n" + "\n".join(linhas_codigo)
                     
                     try:
-                        # Executa fundindo o escopo para evitar o UnboundLocalError
                         exec(codigo_final, ambiente_execucao, ambiente_execucao)
                         funcao_assincrona = ambiente_execucao["_executor_direto"]
                         await funcao_assincrona()
@@ -155,7 +160,7 @@ class AquaCog(commands.Cog):
                         await message.reply("⚠️ Tive uma pequena falha na sintaxe desse comando. Estou ajustando meus parâmetros para tentar novamente de forma inteligente.")
                         return
 
-                # Se for apenas uma conversa, envia o texto conversacional
+                # Se for apenas uma conversa, envia o texto conversacional único gerado
                 if texto_final and texto_final.strip():
                     if not codigo_gerado or "message.reply" not in codigo_gerado:
                         await message.reply(texto_final)
