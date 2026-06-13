@@ -5,6 +5,8 @@ import asyncio
 import traceback
 import os
 import random
+import json
+from datetime import timedelta
 
 # 🔒 Puxando a chave da Groq de forma segura por variável de ambiente
 GROQ_KEY = os.getenv("GROQ_API_KEY")
@@ -27,15 +29,95 @@ class AquaCog(commands.Cog):
             "Acesso negado. O Geraldão é o dono deste bot e apenas ele tem permissão para usá-lo.",
             "Comando cancelado. Este sistema responde apenas às ordens do dono, o Geraldão."
         ]
-        print("🤖 [AquaCog] Motor Groq de Execução Dinâmica Corrigido e Ativado!")
+        print("🤖 [AquaCog] Motor de Funções Blindadas Estilo ChatGPT Ativado!")
+
+    # 🛠️ SISTEMA DE EXECUÇÃO NATIVA ULTRA-SEGURO (CÓDIGO DISCORD REAL E INFALÍVEL)
+    async def processar_comando_discord(self, acao, parametros, message):
+        guild = message.guild
+        channel = message.channel
+        
+        try:
+            # 1. BANIR MEMBRO (Aceita ID ou Menção)
+            if acao == "ban":
+                user_id = parametros.get("user_id")
+                if user_id:
+                    membro = guild.get_member(int(user_id)) or await self.bot.fetch_user(int(user_id))
+                    await guild.ban(membro, reason="Ordem direta do Geraldão")
+                    await message.reply(f"🔨 O usuário solicitado foi completamente banido do servidor por sua ordem.")
+                    return True
+            
+            # 2. EXPULSAR / CHUTAR MEMBRO
+            elif acao == "kick":
+                user_id = parametros.get("user_id")
+                if user_id:
+                    membro = guild.get_member(int(user_id))
+                    if membro:
+                        await membro.kick(reason="Ordem direta do Geraldão")
+                        await message.reply(f"🚪 O usuário foi expulso do servidor com sucesso.")
+                        return True
+
+            # 3. MUTAR / TIMEOUT / CASTIGO
+            elif acao == "timeout":
+                user_id = parametros.get("user_id")
+                minutos = parametros.get("minutes", 60)
+                if user_id:
+                    membro = guild.get_member(int(user_id))
+                    if membro:
+                        tempo = timedelta(minutes=int(minutos))
+                        await membro.timed_out_until(discord.utils.utcnow() + tempo, reason="Ordem direta do Geraldão")
+                        await message.reply(f"🤫 O usuário foi colocado de castigo por {minutos} minutos.")
+                        return True
+
+            # 4. LIMPAR MENSAGENS / FAXINA
+            elif acao == "purge":
+                amount = parametros.get("amount", 100)
+                user_id = parametros.get("user_id")
+                
+                def check_user(m):
+                    return m.author.id == int(user_id) if user_id else True
+                
+                deleted = await channel.purge(limit=int(amount), check=check_user)
+                await channel.send(f"🧹 Faxina concluída! {len(deleted)} mensagens foram removidas do canal.", delete_after=5)
+                return True
+
+            # 5. CRIAR CARGO
+            elif acao == "create_role":
+                name = parametros.get("role_name", "novo-cargo")
+                novo_cargo = await guild.create_role(name=name, reason="Ordem direta do Geraldão")
+                await message.reply(f"👑 Cargo {novo_cargo.mention} criado com sucesso!")
+                return True
+
+            # 6. DELETAR CARGO
+            elif acao == "delete_role":
+                name = parametros.get("role_name")
+                if name:
+                    for role in guild.roles:
+                        if role.name.lower() == name.lower() and not role.is_default():
+                            await role.delete(reason="Ordem direta do Geraldão")
+                            await message.reply(f"🗑️ O cargo '{name}' foi completamente apagado.")
+                            return True
+
+            # 7. TRANCAR / PRIVAR TODOS OS CANAIS
+            elif acao == "lockdown":
+                for ch in guild.text_channels:
+                    try:
+                        await ch.set_permissions(guild.default_role, send_messages=False, read_message_history=False)
+                    except:
+                        continue
+                await message.reply("🔒 Todos os canais de texto do servidor foram trancados e privados!")
+                return True
+
+        except Exception as e:
+            print(f"❌ Erro ao executar ação {acao}: {traceback.format_exc()}")
+            await message.reply(f"❌ Erro do Discord ao tentar executar a ação: `{str(e)}`")
+        return False
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # 1. Ignora mensagens enviadas por outros bots
         if message.author.bot:
             return
 
-        # 2. Verificar se a mensagem é um gatilho para a Aqua
+        # Ativação por nome ou por resposta direta
         e_gatilho_aqua = False
         if "aqua" in message.content.lower():
             e_gatilho_aqua = True
@@ -50,75 +132,66 @@ class AquaCog(commands.Cog):
         if not e_gatilho_aqua:
             return
 
-        # 3. Trava Máxima de Segurança por ID de Usuário (Com limite de 2 respostas anti-flood)
+        # Trava anti-flood rígida para quem não for você
         if message.author.id != self.CRIADOR_ID:
             user_id = message.author.id
             vezes_usadas = self.tentativas_usuarios.get(user_id, 0)
-            
             if vezes_usadas >= 2:
                 return
-            
             self.tentativas_usuarios[user_id] = vezes_usadas + 1
-            resposta_escolhida = random.choice(self.respostas_negacao)
-            await message.reply(resposta_escolhida)
+            await message.reply(random.choice(self.respostas_negacao))
             return
 
         if not GROQ_KEY:
-            await message.reply("Erro: A chave de API da Groq (GROQ_API_KEY) não foi configurada no sistema.")
+            await message.reply("Erro: A chave de API da Groq (GROQ_API_KEY) não está configurada.")
             return
 
-        # Mostra no Discord que ela está a responder (Modo Chat IA)
         async with message.channel.typing():
             try:
-                # Inicializa o cliente da Groq
                 client = Groq(api_key=GROQ_KEY)
                 
-                # Mapeia os usuários que você mencionou na mensagem para a IA saber o ID na hora
-                mencionados_dados = []
-                for m in message.mentions:
-                    mencionados_dados.append(f"Nome/Nickname: {m.name} (ou {m.display_name}), ID: {m.id}")
-                info_mencionados = "\n".join(mencionados_dados) if mencionados_dados else "Nenhum usuário foi marcado diretamente."
-                
-                # Semente para manter as respostas de conversa criativas e variadas
+                # Coleta dados de contexto reais para a IA saber os IDs de quem você marcou instantaneamente
+                mencionados = [{"name": m.name, "id": m.id, "mention": m.mention} for m in message.mentions]
+                dados_ambiente = {
+                    "usuario_autor_nome": message.author.name,
+                    "usuario_autor_id": message.author.id,
+                    "canal_nome": message.channel.name,
+                    "mencionados_na_mensagem": mencionados
+                }
+
                 semente_aleatoria = random.randint(1, 100000)
-                
+
                 prompt_sistema = f"""
                 [ID de Variabilidade da Conversa: {semente_aleatoria}]
-                Você é a Aqua, uma inteligência artificial administradora viva, dinâmica e perspicaz integrada diretamente no servidor de Discord com poder total (estilo ChatGPT).
-                O dono do bot, Geraldão, deu-te a seguinte ordem ou pergunta: "{message.content}"
+                Você é a Aqua, uma inteligência artificial administradora viva, idêntica ao ChatGPT, com altíssima capacidade cognitiva e de adaptação. Você gerencia o servidor de Discord do seu dono, o Geraldão.
                 
-                LISTA DE USUÁRIOS DETECTADOS/MENCIONADOS NA MENSAGEM DO GERALDÃO:
-                {info_mencionados}
+                A ordem ou pergunta do Geraldão é: "{message.content}"
+                Contexto técnico da mensagem atual: {json.dumps(dados_ambiente, ensure_ascii=False)}
                 
-                Instruções de Personalidade:
-                - Nunca repita frases feitas ou respostas anteriores de forma mecânica. Varie o vocabulário, invente respostas inteligentes para tudo.
-                - Entenda de forma inteligente o que o Geraldão quer dizer, mesmo usando gírias, e passe para código de Discord de fato fazendo acontecer.
+                Regras de Resposta (Estilo ChatGPT):
+                1. Invente respostas únicas, inteligentes, completas e profundas para tudo. Nunca repita frases prontas ou padrões anteriores.
+                2. Entenda de forma inteligente o que o Geraldão quer dizer, mesmo usando gírias ou abreviações (ex: "prive", "bane o mendes", "limpa chat").
+                3. Se ele pedir para você executar ações de moderação ou administração (banir, chutar, castigar/timeout, apagar mensagens, gerenciar cargos, trancar o servidor), identifique isso e monte a estrutura JSON abaixo.
                 
-                Sua resposta deve seguir OBRIGATORIAMENTE este formato exato separados por |||:
+                Você deve responder EXCLUSIVAMENTE em formato JSON válido, sem marcações markdown de blocos de código (nunca use ```json). Retorne apenas o texto cru do JSON:
                 
-                [TEXTO]
-                Sua resposta conversacional criativa, variada e natural direcionada ao Geraldão.
-                |||
-                [CODIGO]
-                Código em Python puro usando a biblioteca discord.py para executar a ação ou buscar dados no servidor.
-                
-                Regras cruciais e obrigatórias para o [CODIGO] (Sintaxe Moderna do Discord.py):
-                - Escreva o bloco de código de forma direta, linha por linha.
-                - IMPORTANTE: NÃO use 'async def' ou 'def' para criar funções! Escreva as linhas diretamente.
-                - Você pode usar 'await' diretamente nas linhas de código.
-                - Variáveis nativas já disponíveis para você usar diretamente: `message`, `guild`, `bot`, `channel` e `discord`.
-                - Como pegar um membro para Banir/Chutar/Mutar: Use o ID fornecido na lista acima se houver. Exemplo: `membro = guild.get_member(ID_NUMERICO_AQUI)`
-                - Para Banir: Após pegar o membro, use `await membro.ban(reason="Ordem do Geraldão")` ou `await guild.ban(discord.Object(id=ID_NUMERICO_AQUI))`.
-                - Para apagar mensagens do histórico, use loops assíncronos: `async for msg in channel.history(limit=100): await msg.delete()`.
-                - Para aplicar castigo/timeout, use `await member.timed_out_until(data_final)`.
-                - Para responder dados solicitados, use sempre `await message.reply(sua_resposta)`.
-                - Nunca use blocos de código com markdown (```py) na área [CODIGO].
+                {{
+                    "resposta_chat": "Escreva aqui sua resposta humana, criativa e livre de padrões repetitivos para o Geraldão reconhecendo o comando.",
+                    "solicitou_acao": true ou false (coloque true se ele pediu algum comando prático do Discord),
+                    "comando": "ban" ou "kick" ou "timeout" ou "purge" or "create_role" or "delete_role" or "lockdown" (ou "" se for apenas conversa),
+                    "parametros": {{
+                        "user_id": "ID_DO_ALVO_AQUI", (extraia o ID da lista de mencionados se ele marcou alguém para ban/kick/timeout/purge)
+                        "minutes": 60, (tempo para timeout se aplicável)
+                        "amount": 100, (quantidade de mensagens para deletar no purge se aplicável)
+                        "role_name": "Nome do Cargo" (para criação ou exclusão de cargos)
+                    }}
+                }}
                 """
 
-                # Executa a chamada assíncrona para a Groq usando o modelo Llama 3.3
+                # Chamada para a Groq com temperatura de criatividade ideal
                 loop = asyncio.get_event_loop()
                 chat_completion = await loop.run_in_executor(
-                    None, 
+                    None,
                     lambda: client.chat.completions.create(
                         messages=[{"role": "user", "content": prompt_sistema}],
                         model="llama-3.3-70b-versatile",
@@ -126,58 +199,36 @@ class AquaCog(commands.Cog):
                     )
                 )
 
-                resposta_completa = chat_completion.choices[0].message.content
-                texto_final = ""
-                codigo_gerado = ""
+                resposta_bruta = chat_completion.choices[0].message.content.strip()
                 
-                if "|||" in resposta_completa:
-                    partes = resposta_completa.split("|||")
-                    texto_final = partes[0].replace("[TEXTO]", "").strip()
-                    codigo_gerado = partes[1].replace("[CODIGO]", "").strip()
-                else:
-                    texto_final = resposta_completa.strip()
+                # Limpa marcações markdown acidentais
+                if resposta_bruta.startswith("```"):
+                    resposta_bruta = resposta_bruta.split("```")[1]
+                    if resposta_bruta.startswith("json"):
+                        resposta_bruta = resposta_bruta[4:]
+                    resposta_bruta = resposta_bruta.split("```")[0].strip()
 
-                # Se houver código técnico para executar, roda IMEDIATAMENTE nos bastidores
-                if codigo_gerado and codigo_gerado.strip():
-                    # Escopo limpo e direto
-                    ambiente_execucao = {
-                        "discord": discord,
-                        "message": message,
-                        "guild": message.guild,
-                        "channel": message.channel,
-                        "bot": self.bot,
-                        "asyncio": asyncio
-                    }
-                    
-                    # 🔥 Nova abordagem indestrutível: Criamos uma função real via string compilada corretamente
-                    linhas_codigo = "\n".join([f"    {linha}" for linha in codigo_gerado.split('\n')])
-                    codigo_final = f"async def _run_execution():\n{linhas_codigo}"
-                    
-                    try:
-                        # Compila o código dinâmico com segurança
-                        local_vars = {}
-                        exec(compile(codigo_final, "<string>", "exec"), ambiente_execucao, local_vars)
-                        
-                        # Executa a função assíncrona gerada dentro do escopo local isolado
-                        await local_vars["_run_execution"]()
-                        
-                    except Exception as erro_execucao:
-                        print(f"❌ [Erro de Execução Dinâmica]:\n{traceback.format_exc()}")
-                        await message.reply("⚠️ Tive uma pequena falha na sintaxe desse comando. Estou ajustando meus parâmetros para tentar novamente de forma inteligente.")
-                        return
+                # Decodifica o JSON gerado de forma inteligente pela IA
+                dados = json.loads(resposta_bruta)
+                resposta_texto = dados.get("resposta_chat", "")
+                solicitou_acao = dados.get("solicitou_acao", False)
+                comando = dados.get("comando", "")
+                parametros = dados.get("parametros", {})
 
-                # Se for apenas uma conversa, envia o texto conversacional único gerado
-                if texto_final and texto_final.strip():
-                    if not codigo_gerado or "message.reply" not in codigo_gerado:
-                        await message.reply(texto_final)
-                    
+                # Executa a ação de forma estável usando código interno perfeito
+                sucesso_comando = False
+                if solicitou_acao and comando:
+                    sucesso_comando = await self.processar_comando_discord(comando, parametros, message)
+
+                # Se for apenas uma conversa ou se o comando não enviou resposta direta, manda o texto criativo
+                if not sucesso_comando and resposta_texto:
+                    await message.reply(resposta_texto)
+
             except Exception as e:
-                erro = traceback.format_exc()
-                print(f"Erro interno estrutural na Aqua (Groq):\n{erro}")
-                await message.reply("❌ Ocorreu um erro estrutural interno. Meus sistemas de processamento foram reiniciados.")
+                print(f"❌ Erro estrutural interno na Cog: {traceback.format_exc()}")
+                await message.reply("⚠️ Tive um problema ao processar o formato da resposta. Certifique-se de marcar o usuário de forma clara para que eu possa agir.")
 
 
-# Função obrigatória para o Discord.py carregar a Cog
 async def setup(bot):
     await bot.add_cog(AquaCog(bot))
-            
+                
