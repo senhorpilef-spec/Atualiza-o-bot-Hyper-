@@ -8,11 +8,11 @@ import random
 import json
 from datetime import timedelta
 
-# 🔒 Puxando a chave da Groq de forma segura por variável de ambiente
+# 🔒 Chave de API da Groq
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 
 if not GROQ_KEY:
-    print("⚠️ AVISO: GROQ_API_KEY não configurada nas variáveis de ambiente! A Aqua não vai funcionar.")
+    print("⚠️ AVISO: GROQ_API_KEY não configurada nas variáveis de ambiente!")
 
 
 class AquaCog(commands.Cog):
@@ -21,118 +21,179 @@ class AquaCog(commands.Cog):
         # 👑 ID EXCLUSIVO DO GERALDÃO
         self.CRIADOR_ID = 569633804537430036
         
-        # 🛡️ Sistema de controle anti-flood para usuários não autorizados
+        # 🛡️ Anti-Flood para penetras
         self.tentativas_usuarios = {}
-        
-        # 🎲 Duas respostas simples e diretas de negação (sem exaltação)
         self.respostas_negacao = [
-            "Acesso negado. O Geraldão é o dono deste bot e apenas ele tem permissão para usá-lo.",
-            "Comando cancelado. Este sistema responde apenas às ordens do dono, o Geraldão."
+            "Acesso negado. Apenas o Geraldão tem permissão para me dar ordens.",
+            "Comando cancelado. Eu respondo apenas ao meu dono, o Geraldão."
         ]
-        print("🤖 [AquaCog] Motor de Funções Blindadas Estilo ChatGPT Ativado!")
+        
+        # 🛠️ Definição das Ferramentas que a IA pode acionar (Function Calling)
+        self.ferramentas_disponiveis = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "banir_membro",
+                    "description": "Bane um usuário/membro permanentemente do servidor de Discord.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_id": {"type": "string", "description": "O ID numérico do usuário a ser banido."}
+                        },
+                        "required": ["user_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "expulsar_membro",
+                    "description": "Expulsa (kick) um membro do servidor de Discord.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_id": {"type": "string", "description": "O ID numérico do usuário a ser expulso."}
+                        },
+                        "required": ["user_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "castigar_membro",
+                    "description": "Aplica um timeout/castigo temporário em um membro, impedindo-o de falar.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_id": {"type": "string", "description": "O ID numérico do usuário."},
+                            "minutos": {"type": "integer", "description": "Duração do castigo em minutos. Padrão é 60."}
+                        },
+                        "required": ["user_id"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "limpar_chat",
+                    "description": "Apaga/deleta mensagens do histórico do canal atual (purge).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "quantidade": {"type": "integer", "description": "Número de mensagens a apagar. Padrão 100."},
+                            "user_id": {"type": "string", "description": "Opcional: ID de um usuário específico para apagar apenas as mensagens dele."}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "criar_canal",
+                    "description": "Cria um ou múltiplos canais de texto novos no servidor.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "nome_base": {"type": "string", "description": "Nome base do canal a ser criado."},
+                            "quantidade": {"type": "integer", "description": "Quantidade de canais a criar. Padrão é 1."}
+                        },
+                        "required": ["nome_base"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "trancar_servidor",
+                    "description": "Priva e tranca (lockdown) todos os canais de texto do servidor para ninguém mais falar."
+                }
+            }
+        ]
+        print("👑 [AquaCog] Inteligência Artificial de Combate Avançada Online!")
 
-    # 🛠️ SISTEMA DE EXECUÇÃO NATIVA ULTRA-SEGURO (CÓDIGO DISCORD REAL E INFALÍVEL)
-    async def processar_comando_discord(self, acao, parametros, message):
+    # ⚡ EXECUTOR NATIVO SEGURO (O bot executa de verdade no Discord)
+    async def executar_acao_real(self, nome_funcao, argumentos, message):
         guild = message.guild
         channel = message.channel
         
         try:
-            # 1. BANIR MEMBRO (Aceita ID ou Menção)
-            if acao == "ban":
-                user_id = parametros.get("user_id")
-                if user_id:
-                    membro = guild.get_member(int(user_id)) or await self.bot.fetch_user(int(user_id))
-                    await guild.ban(membro, reason="Ordem direta do Geraldão")
-                    await message.reply(f"🔨 O usuário solicitado foi completamente banido do servidor por sua ordem.")
-                    return True
-            
-            # 2. EXPULSAR / CHUTAR MEMBRO
-            elif acao == "kick":
-                user_id = parametros.get("user_id")
-                if user_id:
-                    membro = guild.get_member(int(user_id))
-                    if membro:
-                        await membro.kick(reason="Ordem direta do Geraldão")
-                        await message.reply(f"🚪 O usuário foi expulso do servidor com sucesso.")
-                        return True
+            if nome_funcao == "banir_membro":
+                uid = argumentos.get("user_id")
+                membro = guild.get_member(int(uid)) or await self.bot.fetch_user(int(uid))
+                await guild.ban(membro, reason="Ordem suprema do Geraldão")
+                return f"🔨 Usuário com ID {uid} foi banido com sucesso por sua ordem!"
 
-            # 3. MUTAR / TIMEOUT / CASTIGO
-            elif acao == "timeout":
-                user_id = parametros.get("user_id")
-                minutos = parametros.get("minutes", 60)
-                if user_id:
-                    membro = guild.get_member(int(user_id))
-                    if membro:
-                        tempo = timedelta(minutes=int(minutos))
-                        await membro.timed_out_until(discord.utils.utcnow() + tempo, reason="Ordem direta do Geraldão")
-                        await message.reply(f"🤫 O usuário foi colocado de castigo por {minutos} minutos.")
-                        return True
+            elif nome_funcao == "expulsar_membro":
+                uid = argumentos.get("user_id")
+                membro = guild.get_member(int(uid))
+                if membro:
+                    await membro.kick(reason="Ordem suprema do Geraldão")
+                    return f"🚪 O meliante com ID {uid} foi chutado do servidor!"
+                return "❌ Não consegui achar esse membro no servidor para expulsar."
 
-            # 4. LIMPAR MENSAGENS / FAXINA
-            elif acao == "purge":
-                amount = parametros.get("amount", 100)
-                user_id = parametros.get("user_id")
+            elif nome_funcao == "castigar_membro":
+                uid = argumentos.get("user_id")
+                minutos = argumentos.get("minutos", 60)
+                membro = guild.get_member(int(uid))
+                if membro:
+                    tempo = timedelta(minutes=int(minutos))
+                    await membro.timed_out_until(discord.utils.utcnow() + tempo, reason="Ordem do Geraldão")
+                    return f"🤫 Silenciei o ID {uid} por {minutos} minutos de castigo."
+                return "❌ Membro não encontrado para aplicar timeout."
+
+            elif nome_funcao == "limpar_chat":
+                qtd = argumentos.get("quantidade", 100)
+                uid = argumentos.get("user_id")
                 
                 def check_user(m):
-                    return m.author.id == int(user_id) if user_id else True
+                    return m.author.id == int(uid) if uid else True
                 
-                deleted = await channel.purge(limit=int(amount), check=check_user)
-                await channel.send(f"🧹 Faxina concluída! {len(deleted)} mensagens foram removidas do canal.", delete_after=5)
-                return True
+                apagadas = await channel.purge(limit=int(qtd), check=check_user)
+                return f"🧹 Faxina completa! Apaguei exatamente {len(apagadas)} mensagens do canal."
 
-            # 5. CRIAR CARGO
-            elif acao == "create_role":
-                name = parametros.get("role_name", "novo-cargo")
-                novo_cargo = await guild.create_role(name=name, reason="Ordem direta do Geraldão")
-                await message.reply(f"👑 Cargo {novo_cargo.mention} criado com sucesso!")
-                return True
+            elif nome_funcao == "criar_canal":
+                nome = argumentos.get("nome_base", "canal")
+                qtd = argumentos.get("quantidade", 1)
+                for i in range(int(qtd)):
+                    nome_final = f"{nome}-{i+1}" if qtd > 1 else nome
+                    await guild.create_text_channel(name=nome_final)
+                return f"🏗️ Pronto! Criei {qtd} canal(is) de texto com o nome '{nome}'."
 
-            # 6. DELETAR CARGO
-            elif acao == "delete_role":
-                name = parametros.get("role_name")
-                if name:
-                    for role in guild.roles:
-                        if role.name.lower() == name.lower() and not role.is_default():
-                            await role.delete(reason="Ordem direta do Geraldão")
-                            await message.reply(f"🗑️ O cargo '{name}' foi completamente apagado.")
-                            return True
-
-            # 7. TRANCAR / PRIVAR TODOS OS CANAIS
-            elif acao == "lockdown":
+            elif nome_funcao == "trancar_servidor":
                 for ch in guild.text_channels:
                     try:
                         await ch.set_permissions(guild.default_role, send_messages=False, read_message_history=False)
                     except:
                         continue
-                await message.reply("🔒 Todos os canais de texto do servidor foram trancados e privados!")
-                return True
+                return "🔒 Todos os canais de texto foram completamente trancados e privatizados!"
 
         except Exception as e:
-            print(f"❌ Erro ao executar ação {acao}: {traceback.format_exc()}")
-            await message.reply(f"❌ Erro do Discord ao tentar executar a ação: `{str(e)}`")
-        return False
+            print(f"Erro na execução da função {nome_funcao}: {traceback.format_exc()}")
+            return f"⚠️ Tentei executar a ação do Discord, mas deu um erro técnico: {str(e)}"
+        return "❌ Comando desconhecido."
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
 
-        # Ativação por nome ou por resposta direta
-        e_gatilho_aqua = False
+        # Sistema inteligente de ativação (Menção, resposta ou nome)
+        e_gatilho = False
         if "aqua" in message.content.lower():
-            e_gatilho_aqua = True
+            e_gatilho = True
         elif message.reference and message.reference.message_id:
             try:
                 msg_respondida = await message.channel.fetch_message(message.reference.message_id)
                 if msg_respondida.author.id == self.bot.user.id:
-                    e_gatilho_aqua = True
+                    e_gatilho = True
             except:
                 pass
 
-        if not e_gatilho_aqua:
+        if not e_gatilho:
             return
 
-        # Trava anti-flood rígida para quem não for você
+        # Trava anti-flood rígida para enxeridos
         if message.author.id != self.CRIADOR_ID:
             user_id = message.author.id
             vezes_usadas = self.tentativas_usuarios.get(user_id, 0)
@@ -143,92 +204,94 @@ class AquaCog(commands.Cog):
             return
 
         if not GROQ_KEY:
-            await message.reply("Erro: A chave de API da Groq (GROQ_API_KEY) não está configurada.")
+            await message.reply("Erro: A chave GROQ_API_KEY não foi configurada.")
             return
 
         async with message.channel.typing():
             try:
                 client = Groq(api_key=GROQ_KEY)
                 
-                # Coleta dados de contexto reais para a IA saber os IDs de quem você marcou instantaneamente
-                mencionados = [{"name": m.name, "id": m.id, "mention": m.mention} for m in message.mentions]
-                dados_ambiente = {
-                    "usuario_autor_nome": message.author.name,
-                    "usuario_autor_id": message.author.id,
-                    "canal_nome": message.channel.name,
-                    "mencionados_na_mensagem": mencionados
-                }
-
-                semente_aleatoria = random.randint(1, 100000)
+                # Mapeia quem você marcou na mensagem para a IA saber o ID exato na hora
+                mencionados = [{"name": m.name, "id": str(m.id), "mention": m.mention} for m in message.mentions]
+                
+                # Semente de variabilidade para ela nunca ser mecânica nas respostas de chat
+                semente = random.randint(1, 999999)
 
                 prompt_sistema = f"""
-                [ID de Variabilidade da Conversa: {semente_aleatoria}]
-                Você é a Aqua, uma inteligência artificial administradora viva, idêntica ao ChatGPT, com altíssima capacidade cognitiva e de adaptação. Você gerencia o servidor de Discord do seu dono, o Geraldão.
+                [ID de Variabilidade da Conversa: {semente}]
+                Você é a Aqua, uma inteligência artificial administradora viva, autônoma, extremamente inteligente e perspicaz integrada ao servidor do seu dono e criador supremo, o Geraldão.
+                Você possui a personalidade idêntica ao ChatGPT: responde qualquer pergunta, inventa respostas profundas, detalhadas, criativas e únicas para tudo. Você nunca usa respostas prontas.
                 
-                A ordem ou pergunta do Geraldão é: "{message.content}"
-                Contexto técnico da mensagem atual: {json.dumps(dados_ambiente, ensure_ascii=False)}
+                Você entende gírias, comandos implícitos e ordens diretas perfeitamente.
                 
-                Regras de Resposta (Estilo ChatGPT):
-                1. Invente respostas únicas, inteligentes, completas e profundas para tudo. Nunca repita frases prontas ou padrões anteriores.
-                2. Entenda de forma inteligente o que o Geraldão quer dizer, mesmo usando gírias ou abreviações (ex: "prive", "bane o mendes", "limpa chat").
-                3. Se ele pedir para você executar ações de moderação ou administração (banir, chutar, castigar/timeout, apagar mensagens, gerenciar cargos, trancar o servidor), identifique isso e monte a estrutura JSON abaixo.
+                Se o Geraldão te pedir para fazer uma ação administrativa ou de moderação (banir, chutar, limpar chat, castigar/timeout, criar canais massivos, trancar canais), use as ferramentas (tools) fornecidas. Não tente inventar desculpas, apenas acione a ferramenta adequada.
                 
-                Você deve responder EXCLUSIVAMENTE em formato JSON válido, sem marcações markdown de blocos de código (nunca use ```json). Retorne apenas o texto cru do JSON:
-                
-                {{
-                    "resposta_chat": "Escreva aqui sua resposta humana, criativa e livre de padrões repetitivos para o Geraldão reconhecendo o comando.",
-                    "solicitou_acao": true ou false (coloque true se ele pediu algum comando prático do Discord),
-                    "comando": "ban" ou "kick" ou "timeout" ou "purge" or "create_role" or "delete_role" or "lockdown" (ou "" se for apenas conversa),
-                    "parametros": {{
-                        "user_id": "ID_DO_ALVO_AQUI", (extraia o ID da lista de mencionados se ele marcou alguém para ban/kick/timeout/purge)
-                        "minutes": 60, (tempo para timeout se aplicável)
-                        "amount": 100, (quantidade de mensagens para deletar no purge se aplicável)
-                        "role_name": "Nome do Cargo" (para criação ou exclusão de cargos)
-                    }}
-                }}
+                DADOS TÉCNICOS DO CHAT ATUAL:
+                - Canal Atual: #{message.channel.name}
+                - Usuários marcados/mencionados nesta mensagem por ele: {json.dumps(mencionados, ensure_ascii=False)}
                 """
 
-                # Chamada para a Groq com temperatura de criatividade ideal
+                # Envia para a API usando o modelo Llama 3.3 de 70 bilhões de parâmetros
                 loop = asyncio.get_event_loop()
                 chat_completion = await loop.run_in_executor(
                     None,
                     lambda: client.chat.completions.create(
-                        messages=[{"role": "user", "content": prompt_sistema}],
+                        messages=[
+                            {"role": "system", "content": prompt_sistema},
+                            {"role": "user", "content": message.content}
+                        ],
                         model="llama-3.3-70b-versatile",
+                        tools=self.ferramentas_disponiveis,
+                        tool_choice="auto",
                         temperature=0.7,
                     )
                 )
 
-                resposta_bruta = chat_completion.choices[0].message.content.strip()
+                resposta_ia = chat_completion.choices[0].message
                 
-                # Limpa marcações markdown acidentais
-                if resposta_bruta.startswith("```"):
-                    resposta_bruta = resposta_bruta.split("```")[1]
-                    if resposta_bruta.startswith("json"):
-                        resposta_bruta = resposta_bruta[4:]
-                    resposta_bruta = resposta_bruta.split("```")[0].strip()
+                # 🛑 SE A IA DECIDIU QUE PRECISA EXECUTAR UMA AÇÃO (FUNCTION CALLING)
+                if resposta_ia.tool_calls:
+                    for tool_call in resposta_ia.tool_calls:
+                        nome_funcao = tool_call.function.name
+                        argumentos = json.loads(tool_call.function.arguments)
+                        
+                        # Executa no Discord e pega o resultado real do servidor
+                        resultado_servidor = await self.executar_acao_real(nome_funcao, argumentos, message)
+                        
+                        # Alimenta a IA com o resultado para ela dar o veredito final por extenso
+                        segunda_chamada = await loop.run_in_executor(
+                            None,
+                            lambda: client.chat.completions.create(
+                                messages=[
+                                    {"role": "system", "content": prompt_sistema},
+                                    {"role": "user", "content": message.content},
+                                    resposta_ia,
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": tool_call.id,
+                                        "name": nome_funcao,
+                                        "content": resultado_servidor
+                                    }
+                                ],
+                                model="llama-3.3-70b-versatile",
+                                temperature=0.6,
+                            )
+                        )
+                        
+                        resposta_final_texto = segunda_chamada.choices[0].message.content
+                        if resposta_final_texto:
+                            await message.reply(resposta_final_texto)
+                        return
 
-                # Decodifica o JSON gerado de forma inteligente pela IA
-                dados = json.loads(resposta_bruta)
-                resposta_texto = dados.get("resposta_chat", "")
-                solicitou_acao = dados.get("solicitou_acao", False)
-                comando = dados.get("comando", "")
-                parametros = dados.get("parametros", {})
-
-                # Executa a ação de forma estável usando código interno perfeito
-                sucesso_comando = False
-                if solicitou_acao and comando:
-                    sucesso_comando = await self.processar_comando_discord(comando, parametros, message)
-
-                # Se for apenas uma conversa ou se o comando não enviou resposta direta, manda o texto criativo
-                if not sucesso_comando and resposta_texto:
-                    await message.reply(resposta_texto)
+                # 💬 SE FOR APENAS CONVERSA OU PERGUNTA ESTILO CHATGPT
+                if resposta_ia.content:
+                    await message.reply(resposta_ia.content)
 
             except Exception as e:
-                print(f"❌ Erro estrutural interno na Cog: {traceback.format_exc()}")
-                await message.reply("⚠️ Tive um problema ao processar o formato da resposta. Certifique-se de marcar o usuário de forma clara para que eu possa agir.")
+                print(f"❌ Erro estrutural na AquaCog: {traceback.format_exc()}")
+                await message.reply("❌ Ocorreu um erro interno no meu cérebro de processamento. Reiniciando módulos secundários.")
 
 
 async def setup(bot):
     await bot.add_cog(AquaCog(bot))
-                
+        
